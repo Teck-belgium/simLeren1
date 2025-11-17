@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<title>2D Glider Simulator - Teck</title>
+<style>
+  body { 
+    margin: 0; 
+    background: #0a0f28; 
+    overflow: hidden; 
+    font-family: Arial, sans-serif; 
+    color: white;
+  }
+
+  #hud {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 20px;
+    background: rgba(0,0,0,0.4);
+    padding: 10px 15px;
+    border-radius: 8px;
+  }
+</style>
+</head>
+
+<body>
+<canvas id="sim"></canvas>
+<div id="hud">Snelheid: 0 km/u<br>Hoogte: 0 m</div>
+
+<script>
+// -------------------------------------------------
+// 1 — Canvas & Basis
+// -------------------------------------------------
+const canvas = document.getElementById("sim");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// -------------------------------------------------
+// 2 — Fysica variabelen
+// -------------------------------------------------
+let x = 200;         // horizontale positie
+let y = 300;         // verticale positie
+let vx = 0;          // horizontale snelheid
+let vy = 0;          // verticale snelheid
+let pitch = 0;       // neushoek (roteren)
+let throttle = 0;    // motorvermogen (0–1), kan ook 0 voor zwever
+
+const mass = 300;    // massa van zwever
+const g = 9.81;      // zwaartekracht
+const liftFactor = 0.30;  // lift sterkte
+const dragFactor = 0.02;  // luchtweerstand
+const thrustPower = 150;  // motorvermogen
+
+// Input
+const keys = {};
+
+// -------------------------------------------------
+// 3 — Input Events
+// -------------------------------------------------
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+// -------------------------------------------------
+// 4 — Physics update (60x/sec)
+// -------------------------------------------------
+function updatePhysics(dt) {
+
+  // Besturing
+  if (keys["ArrowUp"]) pit
