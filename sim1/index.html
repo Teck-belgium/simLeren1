@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>2D Glider Simulator - Teck (met startbaan)</title>
+<title>2D Glider Simulator - Teck (vrij bewegen)</title>
 <link rel="stylesheet" href="/simLeren1/css/style.css"/> 
 <style>
   body { margin: 0; overflow: hidden; background: #0d1b2a; }
@@ -32,6 +32,29 @@ function resize() { canvas.width = window.innerWidth; canvas.height = window.inn
 resize();
 window.addEventListener("resize", resize);
 
+// -------------------- Physics variables --------------------
+let x = 200;
+let y = canvas.height - 50; // start op grond
+let vx = 20;
+let vy = 0;
+let pitch = 0;
+let throttle = 0;
+
+const mass = 300;
+const g = 9.81;
+const liftFactor = 0.30;
+const dragFactor = 0.02;
+const thrustPower = 150;
+
+// inputs
+const keys = {};
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+// -------------------- helper functions --------------------
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+// -------------------- Physics update --------------------
 function updatePhysics(dt) {
   dt = Math.min(0.05, dt);
 
@@ -41,20 +64,28 @@ function updatePhysics(dt) {
   if (keys["ArrowRight"]) throttle = Math.min(1, throttle + 0.01);
   if (keys["ArrowLeft"])  throttle = Math.max(0, throttle - 0.01);
 
-  // snelheid & richting
+  // begrens pitch
+  const maxPitch = Math.PI / 3;
+  pitch = clamp(pitch, -maxPitch, maxPitch);
+
   const speed = Math.sqrt(vx*vx + vy*vy);
 
   // --- Drag ---
-  let dragX = -dragFactor * speed * vx;
-  let dragY = -dragFactor * speed * vy;
+  let dragX = 0, dragY = 0;
+  if (speed > 0.0001) {
+    const dragMag = dragFactor * speed * speed;
+    dragX = dragMag * (-vx / speed);
+    dragY = dragMag * (-vy / speed);
+  }
 
   // --- Lift ---
   let liftX = 0, liftY = 0;
-  if (speed > 0.1) {
+  if (speed > 0.0001) {
     const velAngle = Math.atan2(vy, vx);
     const aoa = pitch - velAngle;
-    const liftMag = liftFactor * speed * speed * Math.sin(aoa);
-    const liftDir = velAngle + Math.PI/2;
+    const aoaEffect = clamp(Math.sin(aoa), -0.8, 1.0);
+    const liftMag = liftFactor * speed * speed * aoaEffect;
+    const liftDir = velAngle + Math.PI / 2;
     liftX = liftMag * Math.cos(liftDir);
     liftY = liftMag * Math.sin(liftDir);
   }
@@ -73,26 +104,70 @@ function updatePhysics(dt) {
   const ax = fx / mass;
   const ay = fy / mass;
 
-  // update snelheid en positie
+  // Integratie
   vx += ax * dt;
   vy += ay * dt;
   x += vx * dt;
   y += vy * dt;
 
-  // ground collision
+  // -------------------- Alleen grond-collision --------------------
   const groundY = canvas.height - 50;
   if (y > groundY) {
     y = groundY;
     if (vy > 0) vy = 0;
-    vx *= 0.98;
+    vx *= 0.98; // wrijving
   }
 
   // HUD
   document.getElementById("hud").innerHTML =
-    `Snelheid: ${Math.round(speed*3.6)} km/u<br>` +
+    `Snelheid: ${Math.round(speed * 3.6)} km/u<br>` +
     `Hoogte: ${Math.round(groundY - y)} m<br>` +
-    `Pitch: ${(pitch*180/Math.PI).toFixed(*
+    `Pitch: ${(pitch*180/Math.PI).toFixed(1)}° &nbsp; Throttle: ${Math.round(throttle*100)}%`;
+}
 
+// -------------------- Draw --------------------
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // achtergrond
+  ctx.fillStyle = "#0b1630";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // grond
+  const groundY = canvas.height - 50;
+  ctx.fillStyle = "#3a773a"; // gras
+  ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+
+  // startbaan
+  ctx.fillStyle = "#555555"; // grijze baan
+  ctx.fillRect(50, groundY + 10, canvas.width - 100, 15);
+  ctx.strokeStyle = "#ffffff"; // witte lijn
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(50, groundY + 17.5);
+  ctx.lineTo(canvas.width - 50, groundY + 17.5);
+  ctx.stroke();
+
+  // vliegtuig
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(pitch);
+  ctx.fillStyle = "white";
+  ctx.fillRect(-20, -5, 40, 10);
+  ctx.fillRect(-10, -20, 20, 5);
+  ctx.restore();
+
+  // snelheid vector debug
+  const speed = Math.sqrt(vx*vx + vy*vy);
+  if (speed > 0.1) {
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (vx / speed) * 60, y + (vy / speed) * 60);
+    ctx.strokeStyle = "rgba(255,255,0,0.8)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
 
 // -------------------- Main loop --------------------
 let lastTime = null;
