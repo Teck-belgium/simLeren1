@@ -118,13 +118,13 @@ function updatePhysics(dt) {
     vx *= 0.98; // wrijving
   }
 
-  const ceilingY = 50;
-  if (y < ceilingY) { y = ceilingY; vy = 0; }
+ // const ceilingY = 50;
+  //if (y < ceilingY) { y = ceilingY; vy = 0; }
 
-  const leftBound = 50;
-  const rightBound = canvas.width - 50;
-  if (x < leftBound) { x = leftBound; vx = 0; }
-  if (x > rightBound) { x = rightBound; vx = 0; }
+  //const leftBound = 50;
+  //const rightBound = canvas.width - 50;
+ // if (x < leftBound) { x = leftBound; vx = 0; }
+  //if (x > rightBound) { x = rightBound; vx = 0; }
 
   // HUD
   document.getElementById("hud").innerHTML =
