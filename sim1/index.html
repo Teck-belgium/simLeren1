@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>2D Glider Simulator - Teck (gefikst)</title>
+<title>2D Glider Simulator - Teck (met startbaan)</title>
 <link rel="stylesheet" href="/simLeren1/css/style.css"/> 
 <style>
   body { margin: 0; overflow: hidden; background: #0d1b2a; }
@@ -34,17 +34,17 @@ window.addEventListener("resize", resize);
 
 // -------------------- Physics variables --------------------
 let x = 200;
-let y = 300;
-let vx = 20;      // startsnelheid (m/s)
+let y = canvas.height - 50; // start op grond
+let vx = 20;
 let vy = 0;
-let pitch = 0;    // neusrichting (rad)
-let throttle = 0; // 0..1
+let pitch = 0;
+let throttle = 0;
 
 const mass = 300;
 const g = 9.81;
-const liftFactor = 0.30;   // schaal voor lift (tweakbaar)
-const dragFactor = 0.02;   // schaal voor drag (tweakbaar)
-const thrustPower = 150;   // kracht bij throttle=1
+const liftFactor = 0.30;
+const dragFactor = 0.02;
+const thrustPower = 150;
 
 // inputs
 const keys = {};
@@ -56,28 +56,21 @@ function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
 // -------------------- Physics update --------------------
 function updatePhysics(dt) {
-  // beperkte dt (veiligheidsclamp)
   dt = Math.min(0.05, dt);
 
-  // --- controls: pitch & throttle ---
-  // pitch control: pijltjes
-  if (keys["ArrowUp"]) pitch -= 0.02;    // neus omlaag (negatief)
-  if (keys["ArrowDown"]) pitch += 0.02;  // neus omhoog (positief)
-
-  // throttle control: links/rechts
+  // --- controls ---
+  if (keys["ArrowUp"]) pitch -= 0.02;
+  if (keys["ArrowDown"]) pitch += 0.02;
   if (keys["ArrowRight"]) throttle = Math.min(1, throttle + 0.01);
   if (keys["ArrowLeft"])  throttle = Math.max(0, throttle - 0.01);
 
-  // begrens pitch zodat het niet oneindig kán toenemen
-  const maxPitch = Math.PI / 3;   // ±60 graden max
+  // begrens pitch
+  const maxPitch = Math.PI / 3;
   pitch = clamp(pitch, -maxPitch, maxPitch);
 
-  // snelheid en richting
   const speed = Math.sqrt(vx*vx + vy*vy);
 
-  // --- Drag (tegen beweging in) ---
-  // correcte drag: magnitude = dragFactor * speed^2
-  // richting = tegenover de velocity (vx,vy) --> gebruik unit vector
+  // --- Drag ---
   let dragX = 0, dragY = 0;
   if (speed > 0.0001) {
     const dragMag = dragFactor * speed * speed;
@@ -85,83 +78,94 @@ function updatePhysics(dt) {
     dragY = dragMag * (-vy / speed);
   }
 
-  // --- Lift (ongeveer haaks op vluchtvector, schaal = liftFactor * V^2) ---
-  // Beter: lift hangt ook af van angle-of-attack (aoa = pitch - velAngle)
+  // --- Lift ---
   let liftX = 0, liftY = 0;
   if (speed > 0.0001) {
-    const velAngle = Math.atan2(vy, vx);          // richting van de snelheid
-    const aoa = pitch - velAngle;                 // angle of attack
-    // lift magnitude (schaling met cos of age factor) — als aoa te groot neg/pos kan lift verminderen
-    // we gebruiken een eenvoudige model: lift ~ V^2 * liftFactor * sin(aoa) (sin geeft richting naar positief aoa)
-    // maar we limiteren sin(aoa) zodat lift niet negatief extreem wordt
-    const aoaEffect = clamp(Math.sin(aoa), -0.8, 1.0); // beperk effect
+    const velAngle = Math.atan2(vy, vx);
+    const aoa = pitch - velAngle;
+    const aoaEffect = clamp(Math.sin(aoa), -0.8, 1.0);
     const liftMag = liftFactor * speed * speed * aoaEffect;
-
-    // liftvector = liftMag in richting velAngle + 90°
     const liftDir = velAngle + Math.PI / 2;
     liftX = liftMag * Math.cos(liftDir);
     liftY = liftMag * Math.sin(liftDir);
   }
 
-  // --- Thrust (gericht langs de neus/pitch) ---
+  // --- Thrust ---
   const thrustX = throttle * thrustPower * Math.cos(pitch);
   const thrustY = throttle * thrustPower * Math.sin(pitch);
 
-  // --- Gewicht (gravity) ---
+  // --- Gravity ---
   const weightY = mass * g;
 
-  // --- Som van krachten -> versnelling ---
+  // --- Som van krachten ---
   const fx = dragX + liftX + thrustX;
   const fy = dragY + liftY + thrustY - weightY;
 
   const ax = fx / mass;
   const ay = fy / mass;
 
-  // Integratie van snelheid en positie
+  // Integratie
   vx += ax * dt;
   vy += ay * dt;
   x += vx * dt;
   y += vy * dt;
 
-  // simpele grond-collision
-  if (y > canvas.height - 30) {
-    y = canvas.height - 30;
+  // -------------------- Grenzen --------------------
+  const groundY = canvas.height - 50;
+  if (y > groundY) {
+    y = groundY;
     if (vy > 0) vy = 0;
-    // kleine wrijving op grond
-    vx *= 0.98;
+    vx *= 0.98; // wrijving
   }
 
-  // update HUD (toon ook pitch & throttle & aoa)
+  const ceilingY = 50;
+  if (y < ceilingY) { y = ceilingY; vy = 0; }
+
+  const leftBound = 50;
+  const rightBound = canvas.width - 50;
+  if (x < leftBound) { x = leftBound; vx = 0; }
+  if (x > rightBound) { x = rightBound; vx = 0; }
+
+  // HUD
   document.getElementById("hud").innerHTML =
     `Snelheid: ${Math.round(speed * 3.6)} km/u<br>` +
-    `Hoogte: ${Math.round(canvas.height - y)} m<br>` +
-    `Pitch: ${(pitch * 180/Math.PI).toFixed(1)}° &nbsp; Throttle: ${Math.round(throttle*100)}%`;
+    `Hoogte: ${Math.round(groundY - y)} m<br>` +
+    `Pitch: ${(pitch*180/Math.PI).toFixed(1)}° &nbsp; Throttle: ${Math.round(throttle*100)}%`;
 }
 
 // -------------------- Draw --------------------
 function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // achtergrond / grond
+  // achtergrond
   ctx.fillStyle = "#0b1630";
   ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle = "#1a2a4a";
-  ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
 
-  // teken vliegtuig op (x,y) met rotatie = pitch
+  // grond
+  const groundY = canvas.height - 50;
+  ctx.fillStyle = "#3a773a"; // gras
+  ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+
+  // startbaan
+  ctx.fillStyle = "#555555"; // grijze baan
+  ctx.fillRect(50, groundY + 10, canvas.width - 100, 15);
+  ctx.strokeStyle = "#ffffff"; // witte lijn
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(50, groundY + 17.5);
+  ctx.lineTo(canvas.width - 50, groundY + 17.5);
+  ctx.stroke();
+
+  // vliegtuig
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(pitch);
-
-  // romp
   ctx.fillStyle = "white";
   ctx.fillRect(-20, -5, 40, 10);
-  // vleugel
   ctx.fillRect(-10, -20, 20, 5);
-
   ctx.restore();
 
-  // optionele snelheid vector visual (debug)
+  // snelheid vector debug
   const speed = Math.sqrt(vx*vx + vy*vy);
   if (speed > 0.1) {
     ctx.beginPath();
