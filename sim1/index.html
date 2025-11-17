@@ -2,43 +2,76 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>2D Glider Simulator - Teck (realistisch, camera)</title>
-<link rel="stylesheet" href="/simLeren1/css/style.css"/> 
+<title>3D Glider Simulator - Teck</title>
 <style>
-  body { margin: 0; overflow: hidden; background: #0d1b2a; }
+  body { margin:0; overflow:hidden; background:#0d1b2a; }
   #hud {
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    color: white;
-    font-size: 16px;
-    font-family: Arial;
-    background: rgba(0,0,0,0.4);
-    padding: 8px 10px;
-    border-radius: 6px;
+    position:absolute;
+    top:12px;
+    left:12px;
+    color:white;
+    font-family:Arial;
+    font-size:16px;
+    background:rgba(0,0,0,0.5);
+    padding:8px 10px;
+    border-radius:6px;
   }
 </style>
 </head>
-
 <body>
-<canvas id="sim"></canvas>
 <div id="hud">Snelheid: 0 km/u<br>Hoogte: 0 m</div>
 
+<script src="https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.min.js"></script>
 <script>
-// -------------------- Canvas --------------------
-const canvas = document.getElementById("sim");
-const ctx = canvas.getContext("2d");
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-resize();
-window.addEventListener("resize", resize);
+
+// -------------------- Scene & Camera --------------------
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1b2a);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.set(0,5,10);
+
+// Renderer
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// -------------------- Lights --------------------
+const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+dirLight.position.set(5,10,5);
+scene.add(dirLight);
+
+const ambient = new THREE.AmbientLight(0x404040, 0.5);
+scene.add(ambient);
+
+// -------------------- Ground --------------------
+const groundGeo = new THREE.PlaneGeometry(2000, 2000);
+const groundMat = new THREE.MeshPhongMaterial({color:0x3a773a});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI/2;
+ground.position.y = 0;
+scene.add(ground);
+
+// -------------------- Glider --------------------
+const planeGeo = new THREE.BoxGeometry(2,0.5,1);
+const planeMat = new THREE.MeshStandardMaterial({color:0xffffff});
+const plane = new THREE.Mesh(planeGeo, planeMat);
+plane.position.y = 2;
+scene.add(plane);
 
 // -------------------- Physics variables --------------------
-let x = 200;
-let y = canvas.height - 50; // start op grond
-let vx = 20;  // startsnelheid
-let vy = 0;
-let pitch = 0;
-let throttle = 0;
+let pos = new THREE.Vector3(0,2,0);
+let vel = new THREE.Vector3(20,0,0);
+let pitch = 0;      // rotatie rond z-as (hoogte)
+let yaw = 0;        // rotatie rond y-as (richting)
+let throttle = 0;    // 0..1
 
 const mass = 300;
 const g = 9.81;
@@ -46,140 +79,95 @@ const liftFactor = 0.25;
 const dragFactor = 0.05;
 const thrustPower = 50;
 
-// inputs
+// Input
 const keys = {};
 document.addEventListener("keydown", e => keys[e.key] = true);
 document.addEventListener("keyup", e => keys[e.key] = false);
 
-// helper
+// Helper
 function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
 
 // -------------------- Physics update --------------------
 function updatePhysics(dt){
   dt = Math.min(0.05, dt);
 
-  // controls
-  if(keys["ArrowUp"]) pitch -= 0.02;
-  if(keys["ArrowDown"]) pitch += 0.02;
-  if(keys["ArrowRight"]) throttle = Math.min(1, throttle+0.01);
-  if(keys["ArrowLeft"])  throttle = Math.max(0, throttle-0.01);
+  // --- controls ---
+  const targetPitch = keys["ArrowUp"] ? -0.02 : keys["ArrowDown"] ? 0.02 : 0;
+  pitch += targetPitch * dt * 60;
+  pitch = clamp(pitch, -Math.PI/6, Math.PI/6);
 
-  // pitch limiter
-  pitch = clamp(pitch, -Math.PI/3, Math.PI/3);
+  const targetThrottle = keys["ArrowRight"] ? 1 : keys["ArrowLeft"] ? 0 : throttle;
+  throttle += (targetThrottle - throttle) * 0.02;
 
-  const speed = Math.sqrt(vx*vx + vy*vy);
+  // Forward vector based on yaw and pitch
+  const forward = new THREE.Vector3(Math.sin(yaw), Math.sin(pitch), Math.cos(yaw)).normalize();
 
-  // drag
-  let dragX=0, dragY=0;
-  if(speed>0.0001){
-    const dragMag = dragFactor * speed*speed;
-    dragX = dragMag * (-vx/speed);
-    dragY = dragMag * (-vy/speed);
+  const speed = vel.length();
+
+  // Drag
+  const drag = vel.clone().multiplyScalar(-dragFactor * speed);
+  
+  // Lift (perpendicular op forward vector, richting omhoog)
+  let lift = new THREE.Vector3(0,0,0);
+  if(speed > 1){
+    const aoaEffect = clamp(Math.sin(pitch),0,0.6);
+    lift.set(0,liftFactor*speed*speed*aoaEffect,0);
   }
 
-  // lift
-  let liftX=0, liftY=0;
-  if(speed>0.0001){
-    const velAngle = Math.atan2(vy,vx);
-    const aoa = pitch - velAngle;
-    const liftMag = liftFactor * speed*speed * clamp(Math.sin(aoa), 0, 0.8);
-    const liftDir = velAngle + Math.PI/2;
-    liftX = liftMag * Math.cos(liftDir);
-    liftY = liftMag * Math.sin(liftDir);
+  // Thrust
+  const thrust = forward.clone().multiplyScalar(throttle * thrustPower);
+
+  // Gewicht
+  const weight = new THREE.Vector3(0, -mass*g, 0);
+
+  // Som van krachten
+  const acc = new THREE.Vector3();
+  acc.add(drag).add(lift).add(thrust).add(weight).divideScalar(mass);
+
+  // Integratie
+  vel.add(acc.multiplyScalar(dt));
+  pos.add(vel.clone().multiplyScalar(dt));
+
+  // Grond collision
+  if(pos.y < 0){
+    pos.y = 0;
+    if(vel.y < 0) vel.y = 0;
+    vel.multiplyScalar(0.98);
   }
 
-  // thrust
-  const thrustX = throttle * thrustPower * Math.cos(pitch);
-  const thrustY = throttle * thrustPower * Math.sin(pitch);
+  // Update plane position & rotation
+  plane.position.copy(pos);
+  plane.rotation.x = pitch;
+  plane.rotation.y = yaw;
 
-  // krachten
-  const fx = dragX + liftX + thrustX;
-  const fy = dragY + liftY + thrustY - mass*g;
-
-  const ax = fx/mass;
-  const ay = fy/mass;
-
-  vx += ax*dt;
-  vy += ay*dt;
-  x += vx*dt;
-  y += vy*dt;
-
-  // grond
-  const groundY = canvas.height - 50;
-  if(y > groundY){
-    y = groundY;
-    if(vy>0) vy=0;
-    vx *= 0.98; // wrijving
-  }
-
-  // HUD
+  // Update HUD
   document.getElementById("hud").innerHTML =
     `Snelheid: ${Math.round(speed*3.6)} km/u<br>`+
-    `Hoogte: ${Math.round(groundY - y)} m<br>`+
+    `Hoogte: ${Math.round(pos.y)} m<br>`+
     `Pitch: ${(pitch*180/Math.PI).toFixed(1)}° Throttle: ${Math.round(throttle*100)}%`;
 }
 
-// -------------------- Draw --------------------
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  // camera volgt het vliegtuig
-  const camX = x - canvas.width/2;
-  const camY = y - canvas.height/2;
-
-  // achtergrond
-  ctx.fillStyle="#0b1630";
-  ctx.fillRect(camX, camY, canvas.width, canvas.height);
-
-  // grond
-  const groundYWorld = canvas.height - 50;
-  ctx.fillStyle="#3a773a";
-  ctx.fillRect(camX, groundYWorld, canvas.width, canvas.height-groundYWorld);
-
-  // startbaan
-  ctx.fillStyle="#555555";
-  ctx.fillRect(50 - camX, groundYWorld+10, canvas.width-100, 15);
-  ctx.strokeStyle="#ffffff";
-  ctx.lineWidth=2;
-  ctx.beginPath();
-  ctx.moveTo(50 - camX, groundYWorld+17.5);
-  ctx.lineTo(canvas.width-50 - camX, groundYWorld+17.5);
-  ctx.stroke();
-
-  // vliegtuig in midden scherm
-  ctx.save();
-  ctx.translate(canvas.width/2, canvas.height/2);
-  ctx.rotate(pitch);
-  ctx.fillStyle="white";
-  ctx.fillRect(-20,-5,40,10);
-  ctx.fillRect(-10,-20,20,5);
-  ctx.restore();
-
-  // snelheid vector debug
-  const speed = Math.sqrt(vx*vx + vy*vy);
-  if(speed>0.1){
-    ctx.beginPath();
-    ctx.moveTo(canvas.width/2, canvas.height/2);
-    ctx.lineTo(canvas.width/2 + (vx/speed)*60, canvas.height/2 + (vy/speed)*60);
-    ctx.strokeStyle="rgba(255,255,0,0.8)";
-    ctx.lineWidth=2;
-    ctx.stroke();
-  }
+// -------------------- Camera --------------------
+function updateCamera(){
+  camera.position.lerp(new THREE.Vector3(pos.x, pos.y+5, pos.z+10), 0.1);
+  camera.lookAt(pos);
 }
 
 // -------------------- Main loop --------------------
-let lastTime=null;
+let lastTime = null;
 function loop(ts){
-  if(!lastTime) lastTime=ts;
+  if(!lastTime) lastTime = ts;
   const dt = (ts-lastTime)/1000;
-  lastTime=ts;
+  lastTime = ts;
 
   updatePhysics(dt);
-  draw();
+  updateCamera();
+  renderer.render(scene, camera);
   requestAnimationFrame(loop);
 }
-requestAnimationFrame(loop);
-</script>
 
+requestAnimationFrame(loop);
+
+</script>
 </body>
 </html>
