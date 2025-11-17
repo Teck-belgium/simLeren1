@@ -1,141 +1,15 @@
 <!DOCTYPE html>
 <html lang="nl">
-<head>
-<meta charset="UTF-8">
-<title>2D Glider Simulator - Teck</title>
-<link rel="stylesheet" href="/simLeren1/css/style.css"/> 
-<style>
-  body { margin: 0; overflow: hidden; background: #0d1b2a; }
-  #hud {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    color: white;
-    font-size: 22px;
-    font-family: Arial;
-  }
-</style>
-</head>
-
-<body>
-<canvas id="sim"></canvas>
-<div id="hud">Snelheid: 0 km/u<br>Hoogte: 0 m</div>
-
-<script>
-// -------------------------------------------------
-// 1 — Canvas & Basis
-// -------------------------------------------------
-const canvas = document.getElementById("sim");
-const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-
-// -------------------------------------------------
-// 2 — Fysica variabelen
-// -------------------------------------------------
-let x = 200;
-let y = 300;
-let vx = 20;      // <<< startsnelheid!
-let vy = 0;
-let pitch = 0;
-let throttle = 0;
-
-const mass = 300;
-const g = 9.81;
-const liftFactor = 0.30;
-const dragFactor = 0.02;
-const thrustPower = 150;
-
-// Inputs
-const keys = {};
-
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
-
-// -------------------------------------------------
-// 3 — Physics update
-// -------------------------------------------------
-function updatePhysics(dt) {
-
-  // Besturing
-  if (keys["ArrowUp"]) pitch -= 0.03;
-  if (keys["ArrowDown"]) pitch += 0.03;
-  
-  if (keys["ArrowRight"]) throttle = Math.min(1, throttle + 0.01);
-  if (keys["ArrowLeft"]) throttle = Math.max(0, throttle - 0.01);
-
-  const speed = Math.sqrt(vx * vx + vy * vy);
-
-  const lift = liftFactor * speed * speed;
-  const drag = dragFactor * speed * speed;
-
-  const liftX = lift * Math.cos(pitch - Math.PI/2);
-  const liftY = lift * Math.sin(pitch - Math.PI/2);
-
-  const dragX = drag * -vx;
-  const dragY = drag * -vy;
-
-  const thrustX = throttle * thrustPower * Math.cos(pitch);
-  const thrustY = throttle * thrustPower * Math.sin(pitch);
-
-  const ax = (liftX + dragX + thrustX) / mass;
-  const ay = (liftY + dragY + thrustY - mass * g) / mass;
-
-  vx += ax * dt;
-  vy += ay * dt;
-
-  x += vx * dt;
-  y += vy * dt;
-
-  // Grond collision
-  if (y > canvas.height - 30) {
-    y = canvas.height - 30;
-    vy = 0;
-  }
-
-  // HUD
-  document.getElementById("hud").innerHTML =
-    `Snelheid: ${Math.round(speed * 3.6)} km/u<br>Hoogte: ${Math.round(canvas.height - y)} m`;
-}
-
-// -------------------------------------------------
-// 4 — Draw
-// -------------------------------------------------
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Grond
-  ctx.fillStyle = "#1a2a4a";
-  ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
-
-  // Vliegtuig
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(pitch);
-
-  ctx.fillStyle = "white";
-  ctx.fillRect(-20, -5, 40, 10);  // romp
-  ctx.fillRect(-10, -20, 20, 5);  // vleugel
-
-  ctx.restore();
-}
-
-// -------------------------------------------------
-// 5 — Main loop
-// -------------------------------------------------
-let lastTime = 0;
-function loop(timestamp) {
-  const dt = (timestamp - lastTime) / 1000;
-  lastTime = timestamp;
-
-  updatePhysics(dt);
-  draw();
-
-  requestAnimationFrame(loop);
-}
-
-requestAnimationFrame(loop);
-</script>
-
-</body>
+  <head>
+    <head>
+    <meta charset="UTF-8"/>
+    <title>Simulatoren | Teck</title> 
+    <link rel="stylesheet" href="/simLeren1/css/style.css"/> 
+  </head>
+  <body>
+    <div class="dashboard">
+      <a href="/simLeren1/sim1/index.html" class="dashboard-tile">
+        <span>Sim 1</span>
+      </a>
+  </body>
 </html>
